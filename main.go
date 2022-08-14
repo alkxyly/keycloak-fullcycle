@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -35,6 +36,34 @@ func main() {
 
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, config.AuthCodeURL(state), http.StatusFound)
+	})
+
+	http.HandleFunc("/oauth/callback", func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Query().Get("state") != state {
+			http.Error(writer, "state did not match", http.StatusBadRequest)
+			return
+		}
+
+		token, err := config.Exchange(ctx, request.URL.Query().Get("code"))
+
+		if err != nil {
+			http.Error(writer, "Falha ao trocar o token", http.StatusBadRequest)
+			return
+		}
+
+		resp := struct {
+			AccessToken *oauth2.Token
+		}{
+			AccessToken: token,
+		}
+
+		data, err := json.Marshal(resp)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writer.Write(data)
 	})
 
 	log.Fatal(http.ListenAndServe(":8081", nil))
